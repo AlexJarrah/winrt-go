@@ -13,6 +13,7 @@ import (
 	"github.com/saltosystems/winrt-go/windows/foundation"
 	"github.com/saltosystems/winrt-go/windows/storage/streams"
 	"github.com/saltosystems/winrt-go/windows/system"
+	"github.com/saltosystems/winrt-go/windows/storage/fileproperties"
 )
 
 const SignatureStorageFile string = "rc(Windows.Storage.StorageFile;{fa3f6186-4214-428c-a64c-14c9ac7315ea})"

@@ -19,7 +19,7 @@ type StreamedFileDataRequest struct {
 	ole.IUnknown
 }
 
-func (impl *StreamedFileDataRequest) WriteAsync(buffer *IBuffer) (*foundation.IAsyncOperationWithProgress, error) {
+func (impl *StreamedFileDataRequest) WriteAsync(buffer *streams.IBuffer) (*foundation.IAsyncOperationWithProgress, error) {
 	itf := impl.MustQueryInterface(ole.NewGUID(streams.GUIDIOutputStream))
 	defer itf.Release()
 	v := (*streams.IOutputStream)(unsafe.Pointer(itf))

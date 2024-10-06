@@ -13,6 +13,7 @@ import (
 	"github.com/saltosystems/winrt-go/windows/foundation"
 	"github.com/saltosystems/winrt-go/windows/foundation/collections"
 	"github.com/saltosystems/winrt-go/windows/media/mediaproperties"
+	"github.com/saltosystems/winrt-go/windows/media/capture"
 )
 
 const SignatureAudioDeviceController string = "rc(Windows.Media.Devices.AudioDeviceController;{edd4a388-79c7-4f7c-90e8-ef934b21580a})"
