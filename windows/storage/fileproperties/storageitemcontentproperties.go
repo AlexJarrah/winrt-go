@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-ole/go-ole"
 	"github.com/saltosystems/winrt-go/windows/foundation"
+	"github.com/saltosystems/winrt-go/windows/foundation/collections"
 )
 
 const SignatureStorageItemContentProperties string = "rc(Windows.Storage.FileProperties.StorageItemContentProperties;{05294bad-bc38-48bf-85d7-770e0e2ae0ba})"
