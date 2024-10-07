@@ -3,7 +3,7 @@
 //go:build windows
 
 //nolint:all
-package foundation
+package protection
 
 import (
 	"sync"
@@ -14,49 +14,49 @@ import (
 	"github.com/saltosystems/winrt-go/internal/kernel32"
 )
 
-const GUIDDeferralCompletedHandler string = "ed32a372-f3c8-4faa-9cfb-470148da3888"
-const SignatureDeferralCompletedHandler string = "delegate({ed32a372-f3c8-4faa-9cfb-470148da3888})"
+const GUIDRebootNeededEventHandler string = "64e12a45-973b-4a3a-b260-91898a49a82c"
+const SignatureRebootNeededEventHandler string = "delegate({64e12a45-973b-4a3a-b260-91898a49a82c})"
 
-type DeferralCompletedHandler struct {
+type RebootNeededEventHandler struct {
 	ole.IUnknown
 	sync.Mutex
 	refs uintptr
 	IID  ole.GUID
 }
 
-type DeferralCompletedHandlerVtbl struct {
+type RebootNeededEventHandlerVtbl struct {
 	ole.IUnknownVtbl
 	Invoke uintptr
 }
 
-type DeferralCompletedHandlerCallback func(instance *DeferralCompletedHandler)
+type RebootNeededEventHandlerCallback func(instance *RebootNeededEventHandler, sender *MediaProtectionManager)
 
-var callbacksDeferralCompletedHandler = &deferralCompletedHandlerCallbacks{
+var callbacksRebootNeededEventHandler = &rebootNeededEventHandlerCallbacks{
 	mu:        &sync.Mutex{},
-	callbacks: make(map[unsafe.Pointer]DeferralCompletedHandlerCallback),
+	callbacks: make(map[unsafe.Pointer]RebootNeededEventHandlerCallback),
 }
 
-var releaseChannelsDeferralCompletedHandler = &deferralCompletedHandlerReleaseChannels{
+var releaseChannelsRebootNeededEventHandler = &rebootNeededEventHandlerReleaseChannels{
 	mu:    &sync.Mutex{},
 	chans: make(map[unsafe.Pointer]chan struct{}),
 }
 
-func NewDeferralCompletedHandler(iid *ole.GUID, callback DeferralCompletedHandlerCallback) *DeferralCompletedHandler {
+func NewRebootNeededEventHandler(iid *ole.GUID, callback RebootNeededEventHandlerCallback) *RebootNeededEventHandler {
 	// create type instance
-	size := unsafe.Sizeof(*(*DeferralCompletedHandler)(nil))
+	size := unsafe.Sizeof(*(*RebootNeededEventHandler)(nil))
 	instPtr := kernel32.Malloc(size)
-	inst := (*DeferralCompletedHandler)(instPtr)
+	inst := (*RebootNeededEventHandler)(instPtr)
 
 	// get the callbacks for the VTable
 	callbacks := delegate.RegisterCallbacks(instPtr, inst)
 
 	// the VTable should also be allocated in the heap
-	sizeVTable := unsafe.Sizeof(*(*DeferralCompletedHandlerVtbl)(nil))
+	sizeVTable := unsafe.Sizeof(*(*RebootNeededEventHandlerVtbl)(nil))
 	vTablePtr := kernel32.Malloc(sizeVTable)
 
 	inst.RawVTable = (*interface{})(vTablePtr)
 
-	vTable := (*DeferralCompletedHandlerVtbl)(vTablePtr)
+	vTable := (*RebootNeededEventHandlerVtbl)(vTablePtr)
 	vTable.IUnknownVtbl = ole.IUnknownVtbl{
 		QueryInterface: callbacks.QueryInterface,
 		AddRef:         callbacks.AddRef,
@@ -69,21 +69,21 @@ func NewDeferralCompletedHandler(iid *ole.GUID, callback DeferralCompletedHandle
 	inst.Mutex = sync.Mutex{}
 	inst.refs = 0
 
-	callbacksDeferralCompletedHandler.add(unsafe.Pointer(inst), callback)
+	callbacksRebootNeededEventHandler.add(unsafe.Pointer(inst), callback)
 
-	// See the docs in the releaseChannelsDeferralCompletedHandler struct
-	releaseChannelsDeferralCompletedHandler.acquire(unsafe.Pointer(inst))
+	// See the docs in the releaseChannelsRebootNeededEventHandler struct
+	releaseChannelsRebootNeededEventHandler.acquire(unsafe.Pointer(inst))
 
 	inst.addRef()
 	return inst
 }
 
-func (r *DeferralCompletedHandler) GetIID() *ole.GUID {
+func (r *RebootNeededEventHandler) GetIID() *ole.GUID {
 	return &r.IID
 }
 
 // addRef increments the reference counter by one
-func (r *DeferralCompletedHandler) addRef() uintptr {
+func (r *RebootNeededEventHandler) addRef() uintptr {
 	r.Lock()
 	defer r.Unlock()
 	r.refs++
@@ -91,7 +91,7 @@ func (r *DeferralCompletedHandler) addRef() uintptr {
 }
 
 // removeRef decrements the reference counter by one. If it was already zero, it will just return zero.
-func (r *DeferralCompletedHandler) removeRef() uintptr {
+func (r *RebootNeededEventHandler) removeRef() uintptr {
 	r.Lock()
 	defer r.Unlock()
 
@@ -102,29 +102,31 @@ func (r *DeferralCompletedHandler) removeRef() uintptr {
 	return r.refs
 }
 
-func (instance *DeferralCompletedHandler) Invoke(instancePtr, rawArgs0, rawArgs1, rawArgs2, rawArgs3, rawArgs4, rawArgs5, rawArgs6, rawArgs7, rawArgs8 unsafe.Pointer) uintptr {
+func (instance *RebootNeededEventHandler) Invoke(instancePtr, rawArgs0, rawArgs1, rawArgs2, rawArgs3, rawArgs4, rawArgs5, rawArgs6, rawArgs7, rawArgs8 unsafe.Pointer) uintptr {
+	senderPtr := rawArgs0
 
 	// See the quote above.
-	if callback, ok := callbacksDeferralCompletedHandler.get(instancePtr); ok {
-		callback(instance)
+	sender := (*MediaProtectionManager)(senderPtr)
+	if callback, ok := callbacksRebootNeededEventHandler.get(instancePtr); ok {
+		callback(instance, sender)
 	}
 	return ole.S_OK
 }
 
-func (instance *DeferralCompletedHandler) AddRef() uintptr {
+func (instance *RebootNeededEventHandler) AddRef() uintptr {
 	return instance.addRef()
 }
 
-func (instance *DeferralCompletedHandler) Release() uintptr {
+func (instance *RebootNeededEventHandler) Release() uintptr {
 	rem := instance.removeRef()
 	if rem == 0 {
 		// We're done.
 		instancePtr := unsafe.Pointer(instance)
-		callbacksDeferralCompletedHandler.delete(instancePtr)
+		callbacksRebootNeededEventHandler.delete(instancePtr)
 
 		// stop release channels used to avoid
 		// https://github.com/golang/go/issues/55015
-		releaseChannelsDeferralCompletedHandler.release(instancePtr)
+		releaseChannelsRebootNeededEventHandler.release(instancePtr)
 
 		kernel32.Free(unsafe.Pointer(instance.RawVTable))
 		kernel32.Free(instancePtr)
@@ -132,19 +134,19 @@ func (instance *DeferralCompletedHandler) Release() uintptr {
 	return rem
 }
 
-type deferralCompletedHandlerCallbacks struct {
+type rebootNeededEventHandlerCallbacks struct {
 	mu        *sync.Mutex
-	callbacks map[unsafe.Pointer]DeferralCompletedHandlerCallback
+	callbacks map[unsafe.Pointer]RebootNeededEventHandlerCallback
 }
 
-func (m *deferralCompletedHandlerCallbacks) add(p unsafe.Pointer, v DeferralCompletedHandlerCallback) {
+func (m *rebootNeededEventHandlerCallbacks) add(p unsafe.Pointer, v RebootNeededEventHandlerCallback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.callbacks[p] = v
 }
 
-func (m *deferralCompletedHandlerCallbacks) get(p unsafe.Pointer) (DeferralCompletedHandlerCallback, bool) {
+func (m *rebootNeededEventHandlerCallbacks) get(p unsafe.Pointer) (RebootNeededEventHandlerCallback, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -152,7 +154,7 @@ func (m *deferralCompletedHandlerCallbacks) get(p unsafe.Pointer) (DeferralCompl
 	return v, ok
 }
 
-func (m *deferralCompletedHandlerCallbacks) delete(p unsafe.Pointer) {
+func (m *rebootNeededEventHandlerCallbacks) delete(p unsafe.Pointer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -163,12 +165,12 @@ func (m *deferralCompletedHandlerCallbacks) delete(p unsafe.Pointer) {
 // used to keep a goroutine alive during the lifecycle of this object.
 // This is required to avoid causing a deadlock error.
 // See this: https://github.com/golang/go/issues/55015
-type deferralCompletedHandlerReleaseChannels struct {
+type rebootNeededEventHandlerReleaseChannels struct {
 	mu    *sync.Mutex
 	chans map[unsafe.Pointer]chan struct{}
 }
 
-func (m *deferralCompletedHandlerReleaseChannels) acquire(p unsafe.Pointer) {
+func (m *rebootNeededEventHandlerReleaseChannels) acquire(p unsafe.Pointer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -192,7 +194,7 @@ func (m *deferralCompletedHandlerReleaseChannels) acquire(p unsafe.Pointer) {
 	}()
 }
 
-func (m *deferralCompletedHandlerReleaseChannels) release(p unsafe.Pointer) {
+func (m *rebootNeededEventHandlerReleaseChannels) release(p unsafe.Pointer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

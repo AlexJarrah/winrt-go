@@ -3,7 +3,7 @@
 //go:build windows
 
 //nolint:all
-package foundation
+package collections
 
 import (
 	"sync"
@@ -14,49 +14,49 @@ import (
 	"github.com/saltosystems/winrt-go/internal/kernel32"
 )
 
-const GUIDDeferralCompletedHandler string = "ed32a372-f3c8-4faa-9cfb-470148da3888"
-const SignatureDeferralCompletedHandler string = "delegate({ed32a372-f3c8-4faa-9cfb-470148da3888})"
+const GUIDVectorChangedEventHandler string = "0c051752-9fbf-4c70-aa0c-0e4c82d9a761"
+const SignatureVectorChangedEventHandler string = "delegate({0c051752-9fbf-4c70-aa0c-0e4c82d9a761})"
 
-type DeferralCompletedHandler struct {
+type VectorChangedEventHandler struct {
 	ole.IUnknown
 	sync.Mutex
 	refs uintptr
 	IID  ole.GUID
 }
 
-type DeferralCompletedHandlerVtbl struct {
+type VectorChangedEventHandlerVtbl struct {
 	ole.IUnknownVtbl
 	Invoke uintptr
 }
 
-type DeferralCompletedHandlerCallback func(instance *DeferralCompletedHandler)
+type VectorChangedEventHandlerCallback func(instance *VectorChangedEventHandler, sender *IObservableVector, event *IVectorChangedEventArgs)
 
-var callbacksDeferralCompletedHandler = &deferralCompletedHandlerCallbacks{
+var callbacksVectorChangedEventHandler = &vectorChangedEventHandlerCallbacks{
 	mu:        &sync.Mutex{},
-	callbacks: make(map[unsafe.Pointer]DeferralCompletedHandlerCallback),
+	callbacks: make(map[unsafe.Pointer]VectorChangedEventHandlerCallback),
 }
 
-var releaseChannelsDeferralCompletedHandler = &deferralCompletedHandlerReleaseChannels{
+var releaseChannelsVectorChangedEventHandler = &vectorChangedEventHandlerReleaseChannels{
 	mu:    &sync.Mutex{},
 	chans: make(map[unsafe.Pointer]chan struct{}),
 }
 
-func NewDeferralCompletedHandler(iid *ole.GUID, callback DeferralCompletedHandlerCallback) *DeferralCompletedHandler {
+func NewVectorChangedEventHandler(iid *ole.GUID, callback VectorChangedEventHandlerCallback) *VectorChangedEventHandler {
 	// create type instance
-	size := unsafe.Sizeof(*(*DeferralCompletedHandler)(nil))
+	size := unsafe.Sizeof(*(*VectorChangedEventHandler)(nil))
 	instPtr := kernel32.Malloc(size)
-	inst := (*DeferralCompletedHandler)(instPtr)
+	inst := (*VectorChangedEventHandler)(instPtr)
 
 	// get the callbacks for the VTable
 	callbacks := delegate.RegisterCallbacks(instPtr, inst)
 
 	// the VTable should also be allocated in the heap
-	sizeVTable := unsafe.Sizeof(*(*DeferralCompletedHandlerVtbl)(nil))
+	sizeVTable := unsafe.Sizeof(*(*VectorChangedEventHandlerVtbl)(nil))
 	vTablePtr := kernel32.Malloc(sizeVTable)
 
 	inst.RawVTable = (*interface{})(vTablePtr)
 
-	vTable := (*DeferralCompletedHandlerVtbl)(vTablePtr)
+	vTable := (*VectorChangedEventHandlerVtbl)(vTablePtr)
 	vTable.IUnknownVtbl = ole.IUnknownVtbl{
 		QueryInterface: callbacks.QueryInterface,
 		AddRef:         callbacks.AddRef,
@@ -69,21 +69,21 @@ func NewDeferralCompletedHandler(iid *ole.GUID, callback DeferralCompletedHandle
 	inst.Mutex = sync.Mutex{}
 	inst.refs = 0
 
-	callbacksDeferralCompletedHandler.add(unsafe.Pointer(inst), callback)
+	callbacksVectorChangedEventHandler.add(unsafe.Pointer(inst), callback)
 
-	// See the docs in the releaseChannelsDeferralCompletedHandler struct
-	releaseChannelsDeferralCompletedHandler.acquire(unsafe.Pointer(inst))
+	// See the docs in the releaseChannelsVectorChangedEventHandler struct
+	releaseChannelsVectorChangedEventHandler.acquire(unsafe.Pointer(inst))
 
 	inst.addRef()
 	return inst
 }
 
-func (r *DeferralCompletedHandler) GetIID() *ole.GUID {
+func (r *VectorChangedEventHandler) GetIID() *ole.GUID {
 	return &r.IID
 }
 
 // addRef increments the reference counter by one
-func (r *DeferralCompletedHandler) addRef() uintptr {
+func (r *VectorChangedEventHandler) addRef() uintptr {
 	r.Lock()
 	defer r.Unlock()
 	r.refs++
@@ -91,7 +91,7 @@ func (r *DeferralCompletedHandler) addRef() uintptr {
 }
 
 // removeRef decrements the reference counter by one. If it was already zero, it will just return zero.
-func (r *DeferralCompletedHandler) removeRef() uintptr {
+func (r *VectorChangedEventHandler) removeRef() uintptr {
 	r.Lock()
 	defer r.Unlock()
 
@@ -102,29 +102,33 @@ func (r *DeferralCompletedHandler) removeRef() uintptr {
 	return r.refs
 }
 
-func (instance *DeferralCompletedHandler) Invoke(instancePtr, rawArgs0, rawArgs1, rawArgs2, rawArgs3, rawArgs4, rawArgs5, rawArgs6, rawArgs7, rawArgs8 unsafe.Pointer) uintptr {
+func (instance *VectorChangedEventHandler) Invoke(instancePtr, rawArgs0, rawArgs1, rawArgs2, rawArgs3, rawArgs4, rawArgs5, rawArgs6, rawArgs7, rawArgs8 unsafe.Pointer) uintptr {
+	senderPtr := rawArgs0
+	eventPtr := rawArgs1
 
 	// See the quote above.
-	if callback, ok := callbacksDeferralCompletedHandler.get(instancePtr); ok {
-		callback(instance)
+	sender := (*IObservableVector)(senderPtr)
+	event := (*IVectorChangedEventArgs)(eventPtr)
+	if callback, ok := callbacksVectorChangedEventHandler.get(instancePtr); ok {
+		callback(instance, sender, event)
 	}
 	return ole.S_OK
 }
 
-func (instance *DeferralCompletedHandler) AddRef() uintptr {
+func (instance *VectorChangedEventHandler) AddRef() uintptr {
 	return instance.addRef()
 }
 
-func (instance *DeferralCompletedHandler) Release() uintptr {
+func (instance *VectorChangedEventHandler) Release() uintptr {
 	rem := instance.removeRef()
 	if rem == 0 {
 		// We're done.
 		instancePtr := unsafe.Pointer(instance)
-		callbacksDeferralCompletedHandler.delete(instancePtr)
+		callbacksVectorChangedEventHandler.delete(instancePtr)
 
 		// stop release channels used to avoid
 		// https://github.com/golang/go/issues/55015
-		releaseChannelsDeferralCompletedHandler.release(instancePtr)
+		releaseChannelsVectorChangedEventHandler.release(instancePtr)
 
 		kernel32.Free(unsafe.Pointer(instance.RawVTable))
 		kernel32.Free(instancePtr)
@@ -132,19 +136,19 @@ func (instance *DeferralCompletedHandler) Release() uintptr {
 	return rem
 }
 
-type deferralCompletedHandlerCallbacks struct {
+type vectorChangedEventHandlerCallbacks struct {
 	mu        *sync.Mutex
-	callbacks map[unsafe.Pointer]DeferralCompletedHandlerCallback
+	callbacks map[unsafe.Pointer]VectorChangedEventHandlerCallback
 }
 
-func (m *deferralCompletedHandlerCallbacks) add(p unsafe.Pointer, v DeferralCompletedHandlerCallback) {
+func (m *vectorChangedEventHandlerCallbacks) add(p unsafe.Pointer, v VectorChangedEventHandlerCallback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.callbacks[p] = v
 }
 
-func (m *deferralCompletedHandlerCallbacks) get(p unsafe.Pointer) (DeferralCompletedHandlerCallback, bool) {
+func (m *vectorChangedEventHandlerCallbacks) get(p unsafe.Pointer) (VectorChangedEventHandlerCallback, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -152,7 +156,7 @@ func (m *deferralCompletedHandlerCallbacks) get(p unsafe.Pointer) (DeferralCompl
 	return v, ok
 }
 
-func (m *deferralCompletedHandlerCallbacks) delete(p unsafe.Pointer) {
+func (m *vectorChangedEventHandlerCallbacks) delete(p unsafe.Pointer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -163,12 +167,12 @@ func (m *deferralCompletedHandlerCallbacks) delete(p unsafe.Pointer) {
 // used to keep a goroutine alive during the lifecycle of this object.
 // This is required to avoid causing a deadlock error.
 // See this: https://github.com/golang/go/issues/55015
-type deferralCompletedHandlerReleaseChannels struct {
+type vectorChangedEventHandlerReleaseChannels struct {
 	mu    *sync.Mutex
 	chans map[unsafe.Pointer]chan struct{}
 }
 
-func (m *deferralCompletedHandlerReleaseChannels) acquire(p unsafe.Pointer) {
+func (m *vectorChangedEventHandlerReleaseChannels) acquire(p unsafe.Pointer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -192,7 +196,7 @@ func (m *deferralCompletedHandlerReleaseChannels) acquire(p unsafe.Pointer) {
 	}()
 }
 
-func (m *deferralCompletedHandlerReleaseChannels) release(p unsafe.Pointer) {
+func (m *vectorChangedEventHandlerReleaseChannels) release(p unsafe.Pointer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
