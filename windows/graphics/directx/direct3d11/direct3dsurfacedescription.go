@@ -5,6 +5,10 @@
 //nolint:all
 package direct3d11
 
+import "github.com/saltosystems/winrt-go/windows/graphics/directx"
+
+
+
 const SignatureDirect3DSurfaceDescription string = "struct(Windows.Graphics.DirectX.Direct3D11.Direct3DSurfaceDescription;i4;i4;enum(Windows.Graphics.DirectX.DirectXPixelFormat;i4);struct(Windows.Graphics.DirectX.Direct3D11.Direct3DMultisampleDescription;i4;i4))"
 
 type Direct3DSurfaceDescription struct {
